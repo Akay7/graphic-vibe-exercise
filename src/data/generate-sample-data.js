@@ -58,22 +58,26 @@ export function generateSampleData({ days = REFERENCE_POINTS.length, startDate =
     return formatDate(date);
   });
 
+  // Cost and CPA share the currency axis, so the CPA bars stay a few pixels
+  // tall at the bottom of the plot, as in the reference.
   const series = [
     {
       key: 'cost',
       label: 'Cost',
-      type: 'area',
-      color: '#fff0bf',
+      type: 'areaspline',
+      color: '#fff593',
+      yAxis: 'money',
       data: points.map((p) => Math.round(p.cost * 100) / 100),
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => v.toFixed(2),
     },
     {
       key: 'cpa',
       label: 'CPA',
       type: 'bar',
-      color: '#4285f4',
+      color: '#3470fe',
+      yAxis: 'money',
       data: points.map((p) => Math.round(p.cpa * 100) / 100),
-      format: (v) => `$${v.toFixed(2)}`,
+      format: (v) => v.toFixed(2),
     },
     {
       key: 'roi',

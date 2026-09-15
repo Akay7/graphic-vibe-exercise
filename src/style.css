@@ -6,58 +6,113 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-  background: #f4f4f4;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background: #fff;
   color: #222;
 }
 
+/* Demo chrome below reproduces the table row around the chart in diagram.gif,
+   at the recording's pixel size. */
 .demo-page {
-  max-width: 900px;
+  width: 800px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 24px 0 64px;
 }
 
-.demo-hint {
-  color: #666;
-  margin-top: -8px;
+.demo-version + .demo-version {
+  margin-top: 48px;
 }
 
-.demo-card {
+.demo-version-title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.demo-version-title small {
+  margin-left: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #777;
+}
+
+.demo-topbar {
+  height: 77px;
+  background: #e5f0fc;
+  border-bottom: 1px solid #d9dce2;
+}
+
+.demo-row {
   display: flex;
-  background: #fceaea;
-  border-radius: 12px;
-  padding: 16px;
-  gap: 16px;
-  align-items: stretch;
+  align-items: flex-start;
+  height: 424px;
+  padding-top: 17px;
+  overflow: hidden;
+  background: #fcebeb;
+  border-bottom: 1px solid #dcd0de;
+}
+
+.demo-row:hover {
+  background: #fce0e3;
 }
 
 .demo-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 64px;
+  width: 62px;
   flex-shrink: 0;
 }
 
-.demo-tile {
-  background: #fff;
-  border-radius: 6px;
-  padding: 8px 6px;
-  font-size: 13px;
-  color: #555;
-  text-align: center;
+.demo-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 47px;
+  padding-right: 12px;
+  font-size: 22px;
+  color: #444;
 }
 
-.demo-tile-label {
+.demo-cell:nth-child(even) {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.demo-cell-header {
+  height: 67px;
+  justify-content: center;
+  padding: 0;
+  background: #fff;
   font-weight: 700;
-  color: #111;
+  color: #000;
 }
 
 .demo-chart {
-  flex: 1;
-  min-width: 0;
-  background: #fdf1f1;
-  border: 1px solid #f0d5d5;
+  width: 592px;
+  height: 296px;
+  margin-left: 49px;
+  flex-shrink: 0;
+}
+
+.demo-chart .highcharts-container,
+.demo-chart .highcharts-root {
+  overflow: visible !important;
+}
+
+.demo-edit {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 72px;
+  height: 58px;
+  margin-left: 35px;
+  margin-top: 1px;
+  padding: 0 0 0 20px;
+  flex-shrink: 0;
+  border: 1px solid #dcdbd9;
   border-radius: 8px;
-  padding: 12px;
+  background: #f8f6f5;
+  color: #676562;
+  font-size: 28px;
+}
+
+.demo-edit span {
+  font-size: 14px;
 }

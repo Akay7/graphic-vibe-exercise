@@ -8,20 +8,41 @@
   </head>
   <body>
     <div class="demo-page">
-      <h1>Time-series combo chart</h1>
-      <p class="demo-hint">Hover the chart to see the tooltip.</p>
-      <div class="demo-card">
-        <div class="demo-sidebar">
-          <div class="demo-tile demo-tile-label">Tdy</div>
-          <div class="demo-tile">0%</div>
-          <div class="demo-tile">$0</div>
-          <div class="demo-tile">$0</div>
-          <div class="demo-tile">0</div>
-          <div class="demo-tile">0</div>
-          <div class="demo-tile">—</div>
+      <section class="demo-version">
+        <h2 class="demo-version-title">Version 1 <small>custom SVG + d3-scale (TimeSeriesChart)</small></h2>
+        <div class="demo-topbar"></div>
+        <div class="demo-row">
+          <div class="demo-sidebar">
+            <div class="demo-cell demo-cell-header">Tdy</div>
+            <div class="demo-cell">0%</div>
+            <div class="demo-cell">$0</div>
+            <div class="demo-cell">$0</div>
+            <div class="demo-cell">0</div>
+            <div class="demo-cell">0</div>
+            <div class="demo-cell">—</div>
+          </div>
+          <div id="chart-custom" class="demo-chart"></div>
+          <button class="demo-edit" type="button" aria-label="Edit">✎<span>▾</span></button>
         </div>
-        <div id="chart" class="demo-chart"></div>
-      </div>
+      </section>
+
+      <section class="demo-version">
+        <h2 class="demo-version-title">Version 2 <small>Highcharts (createHighchartsComboChart)</small></h2>
+        <div class="demo-topbar"></div>
+        <div class="demo-row">
+          <div class="demo-sidebar">
+            <div class="demo-cell demo-cell-header">Tdy</div>
+            <div class="demo-cell">0%</div>
+            <div class="demo-cell">$0</div>
+            <div class="demo-cell">$0</div>
+            <div class="demo-cell">0</div>
+            <div class="demo-cell">0</div>
+            <div class="demo-cell">—</div>
+          </div>
+          <div id="chart-highcharts" class="demo-chart"></div>
+          <button class="demo-edit" type="button" aria-label="Edit">✎<span>▾</span></button>
+        </div>
+      </section>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

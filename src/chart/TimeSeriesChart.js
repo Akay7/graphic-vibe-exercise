@@ -1,8 +1,18 @@
-import { scaleLinear, scalePoint } from 'd3-scale';
-import { line, area, curveMonotoneX, curveLinear } from 'd3-shape';
-import { max, min } from 'd3-array';
+import { scaleLinear } from 'd3-scale';
+import { axisIdOf, buildAxes } from './axis.js';
+import { placeTooltip, tooltipHtml } from './tooltip.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Sizes measured off the reference recording (diagram.gif), in its pixels.
+const LINE_WIDTH = { area: 2, areaspline: 2, spline: 5, line: 2 };
+const AREA_FILL_OPACITY = 0.5;
+const SQUARE_MARKER_SIZE = 12;
+const BAR_WIDTH_RATIO = 0.28;
+const BAR_RADIUS = 5;
+const HALO_RADIUS = 19;
+const HALO_OPACITY = 0.25;
+const TOOLTIP_HIDE_DELAY = 500;
 
 const DEFAULT_FORMAT = (value) =>
   Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -13,21 +23,96 @@ function el(tag, attrs = {}) {
   return node;
 }
 
+function linearPath(coords) {
+  return coords.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join('');
+}
+
+// Port of Highcharts' spline smoothing (smoothing 1.5, control points clamped
+// between neighbouring values so the curve never overshoots a data point).
+function splinePath(coords) {
+  const smoothing = 1.5;
+  const denom = smoothing + 1;
+  const rightControls = [];
+  let d = '';
+  coords.forEach(([x, y], i) => {
+    const prev = coords[i - 1];
+    const next = coords[i + 1];
+    let leftX = x;
+    let leftY = y;
+    if (prev && next) {
+      const [lastX, lastY] = prev;
+      const [nextX, nextY] = next;
+      leftX = (smoothing * x + lastX) / denom;
+      leftY = (smoothing * y + lastY) / denom;
+      const rightX = (smoothing * x + nextX) / denom;
+      let rightY = (smoothing * y + nextY) / denom;
+      if (rightX !== leftX) {
+        const correction = ((rightY - leftY) * (rightX - x)) / (rightX - leftX) + y - rightY;
+        leftY += correction;
+        rightY += correction;
+      }
+      if (leftY > lastY && leftY > y) {
+        leftY = Math.max(lastY, y);
+        rightY = 2 * y - leftY;
+      } else if (leftY < lastY && leftY < y) {
+        leftY = Math.min(lastY, y);
+        rightY = 2 * y - leftY;
+      }
+      if (rightY > nextY && rightY > y) {
+        rightY = Math.max(nextY, y);
+        leftY = 2 * y - rightY;
+      } else if (rightY < nextY && rightY < y) {
+        rightY = Math.min(nextY, y);
+        leftY = 2 * y - rightY;
+      }
+      rightControls[i] = [rightX, rightY];
+    }
+    if (i === 0) {
+      d = `M${x},${y}`;
+      return;
+    }
+    const [c1x, c1y] = rightControls[i - 1] || prev;
+    d += `C${c1x},${c1y} ${leftX},${leftY} ${x},${y}`;
+  });
+  return d;
+}
+
+function roundedTopBarPath(x, y, width, height, radius) {
+  const r = Math.max(0, Math.min(radius, width / 2, height));
+  return (
+    `M${x},${y + height}V${y + r}A${r},${r} 0 0 1 ${x + r},${y}` +
+    `H${x + width - r}A${r},${r} 0 0 1 ${x + width},${y + r}V${y + height}Z`
+  );
+}
+
+// Hovered-point marker: circle for areas, diamond for splines, square for lines.
+function hoverMarker(type, x, y, color) {
+  const attrs = { class: 'tsc-hover-marker', fill: color };
+  if (type === 'line') {
+    return el('rect', { ...attrs, x: x - 3.5, y: y - 3.5, width: 7, height: 7 });
+  }
+  if (type === 'spline') {
+    return el('path', { ...attrs, d: `M${x},${y - 5}L${x + 5},${y}L${x},${y + 5}L${x - 5},${y}Z` });
+  }
+  return el('circle', { ...attrs, cx: x, cy: y, r: 4.5 });
+}
+
 /**
- * Renders a multi-series time chart supporting four series types — area,
- * spline, line, bar — sharing one date axis, each on its own y-scale so
- * series with very different magnitudes (e.g. cost vs. CPA) stay legible
- * side by side. Bar-type series render in a short band pinned to the
- * baseline, matching the tick-like bars in the reference design.
+ * Renders a multi-series time chart supporting five series types — area,
+ * areaspline, spline, line, bar — sharing one category date axis. Each series
+ * is scaled on its own y-axis unless several name the same `yAxis` id (e.g.
+ * Cost and CPA sharing a currency axis, which is why the CPA bars in the
+ * reference stay only a few pixels tall).
  *
  * @param {HTMLElement|string} container - element or CSS selector to mount into
  * @param {object} config
  * @param {string[]} config.dates - shared x-axis labels, one per data point
- * @param {object[]} config.series - [{ key, label, type, color, data, format? }]
- *   type: 'area' | 'spline' | 'line' | 'bar'
+ * @param {object[]} config.series - [{ key, label, type, color, data, format?, yAxis?, fillOpacity? }]
+ *   type: 'area' | 'areaspline' | 'spline' | 'line' | 'bar'
  *   data: number[] — same length as config.dates
  *   format: (value:number) => string — optional per-series value formatter
- * @param {number} [config.height=280]
+ *   yAxis: string — optional axis id; series with the same id share a scale
+ * @param {number} [config.height=296] - plot height in px
  */
 export class TimeSeriesChart {
   constructor(container, config) {
@@ -37,6 +122,8 @@ export class TimeSeriesChart {
     this.config = config;
 
     this._buildSkeleton();
+    this.svg.addEventListener('mousemove', (e) => this._onPointerMove(e));
+    this.svg.addEventListener('mouseleave', () => this._onPointerLeave());
     this._resizeObserver = new ResizeObserver(() => this.render());
     this._resizeObserver.observe(this.container);
     this.render();
@@ -48,6 +135,7 @@ export class TimeSeriesChart {
   }
 
   destroy() {
+    clearTimeout(this._hideTimer);
     this._resizeObserver.disconnect();
     this.container.innerHTML = '';
   }
@@ -57,223 +145,220 @@ export class TimeSeriesChart {
     this.container.innerHTML = `
       <div class="tsc-wrap">
         <svg class="tsc-svg"></svg>
-        <div class="tsc-tooltip" hidden>
-          <div class="tsc-tooltip-date"></div>
-          <div class="tsc-tooltip-rows"></div>
-        </div>
+        <div class="tsc-tooltip"></div>
       </div>
     `;
     this.wrapEl = this.container.querySelector('.tsc-wrap');
     this.svg = this.container.querySelector('.tsc-svg');
     this.tooltipEl = this.container.querySelector('.tsc-tooltip');
-    this.tooltipDateEl = this.tooltipEl.querySelector('.tsc-tooltip-date');
-    this.tooltipRowsEl = this.tooltipEl.querySelector('.tsc-tooltip-rows');
   }
 
   render() {
-    const { series, dates } = this.config;
-    const width = this.wrapEl.getBoundingClientRect().width || 600;
-    const height = this.config.height || 280;
-    const margin = { top: 16, right: 12, bottom: 24, left: 12 };
-    const innerW = Math.max(width - margin.left - margin.right, 1);
-    const innerH = Math.max(height - margin.top - margin.bottom, 1);
-    const barBandH = innerH * 0.06;
-    const mainH = innerH - barBandH;
+    const { dates, series } = this.config;
+    const width = this.wrapEl.clientWidth || 592;
+    const height = this.config.height ?? 296;
+    const band = width / dates.length;
+    // Points sit in the middle of each date's band, like a category axis.
+    const xs = dates.map((_, i) => (i + 0.5) * band);
 
-    this.svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    this.svg.setAttribute('width', width);
-    this.svg.setAttribute('height', height);
-    this.svg.innerHTML = '';
-
-    const g = el('g', { transform: `translate(${margin.left},${margin.top})` });
-    this.svg.appendChild(g);
-
-    const x = scalePoint().domain(dates).range([0, innerW]).padding(0.02);
-    const points = dates.map((d) => x(d));
-
-    const yScales = {};
-    for (const s of series) {
-      const lo = Math.min(0, min(s.data));
-      const hi = (max(s.data) || 1) * 1.08;
-      const band = s.type === 'bar' ? barBandH : mainH;
-      yScales[s.key] = scaleLinear().domain([lo, hi]).range([band, 0]);
-    }
-
-    g.appendChild(
-      el('line', {
-        class: 'tsc-baseline',
-        x1: 0,
-        x2: innerW,
-        y1: mainH,
-        y2: mainH,
-      })
+    const yScales = new Map(
+      buildAxes(series).map(({ id, max }) => [id, scaleLinear().domain([0, max]).range([height, 0])])
     );
 
+    this.svg.setAttribute('width', width);
+    this.svg.setAttribute('height', height);
+    this.svg.replaceChildren(
+      el('rect', { class: 'tsc-hit', width, height }),
+      el('rect', { class: 'tsc-frame', x: 1, y: 1, width: width - 2, height: height - 2 })
+    );
+
+    this._markers = {};
+    this._linePaths = {};
     for (const s of series) {
-      this._drawSeries(g, s, points, yScales[s.key], mainH);
+      const y = yScales.get(axisIdOf(s));
+      this._drawSeries(s, s.data.map((v, i) => [xs[i], y(v)]), height, band);
     }
 
-    const overlay = el('rect', {
-      x: 0,
-      y: 0,
-      width: innerW,
-      height: innerH,
-      fill: 'transparent',
-      class: 'tsc-overlay',
-    });
-    g.appendChild(overlay);
-
-    const crosshair = el('line', {
-      class: 'tsc-crosshair',
-      y1: 0,
-      y2: innerH,
-      visibility: 'hidden',
-    });
-    g.appendChild(crosshair);
-
-    const hoverDots = {};
-    for (const s of series) {
-      if (s.type === 'bar') continue;
-      hoverDots[s.key] = el('circle', {
-        class: `tsc-hover-dot tsc-color-${s.key}`,
-        r: 5,
-        fill: s.color,
-        visibility: 'hidden',
-      });
-      g.appendChild(hoverDots[s.key]);
-    }
-
-    this._hover = { x, points, dates, series, yScales, mainH, margin, crosshair, hoverDots, width };
-    overlay.addEventListener('mousemove', (e) => this._onMouseMove(e));
-    overlay.addEventListener('mouseleave', () => this._hideTooltip());
+    this.hoverLayer = el('g', { class: 'tsc-hover-layer' });
+    this.svg.appendChild(this.hoverLayer);
+    this._geometry = { xs, band, width, height, yScales };
+    this._hoverIndex = null;
   }
 
-  _drawSeries(g, s, points, y, mainH) {
-    const yOffset = s.type === 'bar' ? mainH : 0;
-    const coords = s.data.map((v, i) => [points[i], yOffset + y(v)]);
+  _drawSeries(s, coords, height, band) {
+    const add = (tag, attrs) => this.svg.appendChild(el(tag, attrs));
 
-    if (s.type === 'area') {
-      const areaGen = area()
-        .curve(curveMonotoneX)
-        .x((_, i) => points[i])
-        .y0(yOffset + y(Math.min(0, min(s.data))))
-        .y1((_, i) => yOffset + y(s.data[i]));
-      g.appendChild(
-        el('path', {
-          d: areaGen(s.data),
-          class: `tsc-area tsc-color-${s.key}`,
+    switch (s.type) {
+      case 'area':
+      case 'areaspline': {
+        const top = s.type === 'area' ? linearPath(coords) : splinePath(coords);
+        const firstX = coords[0][0];
+        const lastX = coords[coords.length - 1][0];
+        add('path', {
+          class: 'tsc-area',
+          d: `${top}L${lastX},${height}L${firstX},${height}Z`,
           fill: s.color,
-        })
-      );
-      return;
-    }
-
-    if (s.type === 'spline' || s.type === 'line') {
-      const lineGen = line()
-        .curve(s.type === 'spline' ? curveMonotoneX : curveLinear)
-        .x((d) => d[0])
-        .y((d) => d[1]);
-      g.appendChild(
-        el('path', {
-          d: lineGen(coords),
-          class: `tsc-line tsc-color-${s.key} tsc-${s.type}`,
+          'fill-opacity': s.fillOpacity ?? AREA_FILL_OPACITY,
+        });
+        this._linePaths[s.key] = add('path', {
+          class: `tsc-line tsc-${s.type}`,
+          d: top,
           stroke: s.color,
-          fill: 'none',
-        })
-      );
-      if (s.type === 'line') {
-        const markerSize = 8;
-        for (const [cx, cy] of coords) {
-          g.appendChild(
-            el('rect', {
-              x: cx - markerSize / 2,
-              y: cy - markerSize / 2,
-              width: markerSize,
-              height: markerSize,
-              class: `tsc-marker tsc-color-${s.key}`,
+          'stroke-width': LINE_WIDTH[s.type],
+        });
+        break;
+      }
+
+      case 'spline':
+      case 'line':
+        this._linePaths[s.key] = add('path', {
+          class: `tsc-line tsc-${s.type}`,
+          d: s.type === 'spline' ? splinePath(coords) : linearPath(coords),
+          stroke: s.color,
+          'stroke-width': LINE_WIDTH[s.type],
+        });
+        if (s.type === 'line') {
+          this._markers[s.key] = coords.map(([x, y]) =>
+            add('rect', {
+              class: 'tsc-marker',
+              x: x - SQUARE_MARKER_SIZE / 2,
+              y: y - SQUARE_MARKER_SIZE / 2,
+              width: SQUARE_MARKER_SIZE,
+              height: SQUARE_MARKER_SIZE,
               fill: s.color,
             })
           );
         }
-      }
-      return;
-    }
+        break;
 
-    if (s.type === 'bar') {
-      const barWidth = Math.max(6, (points[1] - points[0] || 20) * 0.4);
-      for (const [cx, cy] of coords) {
-        g.appendChild(
-          el('rect', {
-            x: cx - barWidth / 2,
-            y: cy,
-            width: barWidth,
-            height: Math.max(yOffset - cy, 1),
-            class: `tsc-bar tsc-color-${s.key}`,
+      case 'bar': {
+        const barWidth = band * BAR_WIDTH_RATIO;
+        for (const [x, y] of coords) {
+          add('path', {
+            class: 'tsc-bar',
+            d: roundedTopBarPath(x - barWidth / 2, y, barWidth, height - y, BAR_RADIUS),
             fill: s.color,
-          })
-        );
+          });
+        }
+        break;
       }
+
+      default:
+        throw new Error(`TimeSeriesChart: unsupported series type "${s.type}"`);
     }
   }
 
-  _onMouseMove(evt) {
-    const { x, points, dates, series, yScales, mainH, margin, crosshair, hoverDots, width } =
-      this._hover;
+  _onPointerMove(evt) {
+    const { xs, band } = this._geometry;
     const bounds = this.svg.getBoundingClientRect();
-    const mouseX = evt.clientX - bounds.left - margin.left;
+    const mouseX = evt.clientX - bounds.left;
+    const mouseY = evt.clientY - bounds.top;
+    const index = Math.min(xs.length - 1, Math.max(0, Math.floor(mouseX / band)));
 
-    let nearest = 0;
-    let nearestDist = Infinity;
-    points.forEach((px, i) => {
-      const dist = Math.abs(px - mouseX);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = i;
-      }
-    });
+    clearTimeout(this._hideTimer);
+    if (index !== this._hoverIndex) {
+      this._hoverIndex = index;
+      this._drawHover(index);
+      this._fillTooltip(index);
+    }
+    this._setHoveredSeries(index, mouseY);
+    this._positionTooltip(xs[index], mouseY);
+  }
 
-    const px = points[nearest];
-    crosshair.setAttribute('x1', px);
-    crosshair.setAttribute('x2', px);
-    crosshair.setAttribute('visibility', 'visible');
+  _onPointerLeave() {
+    this._hoverIndex = null;
+    this._resetHoverLayer();
+    this._setHoveredSeries(null);
+    clearTimeout(this._hideTimer);
+    this._hideTimer = setTimeout(
+      () => this.tooltipEl.classList.remove('tsc-tooltip-visible'),
+      TOOLTIP_HIDE_DELAY
+    );
+  }
 
-    const rows = [];
-    for (const s of series) {
-      const yOffset = s.type === 'bar' ? mainH : 0;
-      const value = s.data[nearest];
-      const cy = yOffset + yScales[s.key](value);
-      if (hoverDots[s.key]) {
-        hoverDots[s.key].setAttribute('cx', px);
-        hoverDots[s.key].setAttribute('cy', cy);
-        hoverDots[s.key].setAttribute('visibility', 'visible');
-      }
-      const format = s.format || DEFAULT_FORMAT;
-      rows.push(
-        `<div class="tsc-tooltip-row">
-          <span class="tsc-tooltip-dot" style="background:${s.color}"></span>
-          <span class="tsc-tooltip-label">${s.label}:</span>
-          <span class="tsc-tooltip-value">${format(value)}</span>
-        </div>`
+  _resetHoverLayer() {
+    this.hoverLayer.replaceChildren();
+    for (const markers of Object.values(this._markers)) {
+      for (const marker of markers) marker.removeAttribute('visibility');
+    }
+  }
+
+  _drawHover(index) {
+    this._resetHoverLayer();
+    const { xs, yScales } = this._geometry;
+    const x = xs[index];
+    const points = this.config.series
+      .filter((s) => s.type !== 'bar')
+      .map((s) => ({ s, y: yScales.get(axisIdOf(s))(s.data[index]) }));
+
+    // All halos first so every marker sits above every halo.
+    for (const { s, y } of points) {
+      this.hoverLayer.appendChild(
+        el('circle', {
+          class: 'tsc-halo',
+          cx: x,
+          cy: y,
+          r: HALO_RADIUS,
+          fill: s.color,
+          'fill-opacity': HALO_OPACITY,
+        })
       );
     }
-
-    this.tooltipDateEl.textContent = dates[nearest];
-    this.tooltipRowsEl.innerHTML = rows.join('');
-    this.tooltipEl.hidden = false;
-
-    const wrapWidth = this.wrapEl.getBoundingClientRect().width;
-    const tooltipWidth = this.tooltipEl.offsetWidth;
-    const flip = px + margin.left + tooltipWidth + 16 > wrapWidth;
-    const left = flip ? px + margin.left - tooltipWidth - 16 : px + margin.left + 16;
-    this.tooltipEl.style.left = `${Math.max(8, left)}px`;
-    this.tooltipEl.style.top = `${margin.top}px`;
+    for (const { s, y } of points) {
+      this.hoverLayer.appendChild(hoverMarker(s.type, x, y, s.color));
+      this._markers[s.key]?.[index]?.setAttribute('visibility', 'hidden');
+    }
   }
 
-  _hideTooltip() {
-    this.tooltipEl.hidden = true;
-    this._hover.crosshair.setAttribute('visibility', 'hidden');
-    for (const dot of Object.values(this._hover.hoverDots)) {
-      dot.setAttribute('visibility', 'hidden');
+  // The series whose point at this date is nearest the pointer is "hovered";
+  // in the reference that makes the ROI spline switch to a thin line.
+  _setHoveredSeries(index, mouseY) {
+    let hoveredKey = null;
+    if (index != null) {
+      const { yScales } = this._geometry;
+      let best = Infinity;
+      for (const s of this.config.series) {
+        if (s.type === 'bar') continue;
+        const dist = Math.abs(yScales.get(axisIdOf(s))(s.data[index]) - mouseY);
+        if (dist < best) {
+          best = dist;
+          hoveredKey = s.key;
+        }
+      }
     }
+    for (const [key, path] of Object.entries(this._linePaths)) {
+      path.classList.toggle('tsc-series-hover', key === hoveredKey);
+    }
+  }
+
+  _fillTooltip(index) {
+    const { dates, series } = this.config;
+    this.tooltipEl.innerHTML = tooltipHtml(
+      dates[index],
+      series.map((s) => ({
+        color: s.color,
+        label: s.label,
+        value: (s.format || DEFAULT_FORMAT)(s.data[index]),
+      }))
+    );
+  }
+
+  _positionTooltip(pointX, mouseY) {
+    const { width, height } = this._geometry;
+    const tip = this.tooltipEl;
+    const { left, top } = placeTooltip({
+      pointX,
+      mouseY,
+      tipWidth: tip.offsetWidth,
+      tipHeight: tip.offsetHeight,
+      width,
+      height,
+    });
+
+    // Slide between points once visible; appear in place the first time.
+    tip.classList.toggle('tsc-tooltip-animate', tip.classList.contains('tsc-tooltip-visible'));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+    tip.classList.add('tsc-tooltip-visible');
   }
 }
