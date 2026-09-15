@@ -1,15 +1,15 @@
-// Deterministic PRNG (mulberry32) so a given seed always produces the same
-// dataset — useful for demos/screenshots without hardcoding the data itself.
-function mulberry32(seed) {
-  let a = seed;
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+// Values read directly off the tooltips in the reference recording
+// (diagram.gif), one per marker, in date order. These are the ground truth
+// for the demo dataset — everything below reproduces or resamples them
+// rather than inventing unrelated numbers.
+const REFERENCE_START_DATE = new Date(2026, 5, 10); // 10.06.2026
+const REFERENCE_POINTS = [
+  { cost: 2.04, cpa: 0.68, roi: 610.78, conversions: 3 },
+  { cost: 25.85, cpa: 0.86, roi: 180.5, conversions: 30 },
+  { cost: 44.36, cpa: 1.23, roi: 161.47, conversions: 36 },
+  { cost: 55.65, cpa: 0.79, roi: 56.33, conversions: 70 },
+  { cost: 63.75, cpa: 0.71, roi: 357.25, conversions: 90 },
+];
 
 function formatDate(date) {
   const dd = String(date.getDate()).padStart(2, '0');
@@ -17,54 +17,54 @@ function formatDate(date) {
   return `${dd}.${mm}.${date.getFullYear()}`;
 }
 
-function round2(n) {
-  return Math.round(n * 100) / 100;
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// Resamples the reference points onto `count` evenly spaced positions,
+// linearly interpolating between the two nearest reference points.
+function resample(count) {
+  const lastIndex = REFERENCE_POINTS.length - 1;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const pos = count === 1 ? 0 : (i / (count - 1)) * lastIndex;
+    const lo = Math.floor(pos);
+    const hi = Math.min(lo + 1, lastIndex);
+    const t = pos - lo;
+    const a = REFERENCE_POINTS[lo];
+    const b = REFERENCE_POINTS[hi];
+    out.push({
+      cost: lerp(a.cost, b.cost, t),
+      cpa: lerp(a.cpa, b.cpa, t),
+      roi: lerp(a.roi, b.roi, t),
+      conversions: lerp(a.conversions, b.conversions, t),
+    });
+  }
+  return out;
 }
 
 /**
- * Generates a plausible 4-series dataset shaped like the reference design:
- * cost climbing, ROI dipping mid-range then recovering, conversions
- * climbing, and CPA fluctuating near a small baseline. Same `seed` always
- * produces the same numbers.
+ * Generates the 4-series demo dataset. With no arguments it returns the
+ * exact values shown at the 5 marker points in the reference recording.
+ * Pass `days` to resample that same reference shape onto a different
+ * number of evenly spaced points (e.g. for a longer daily series).
  */
-export function generateSampleData({ days = 9, startDate = new Date(2026, 5, 10), seed = 42 } = {}) {
-  const rand = mulberry32(seed);
-  const mid = (days - 1) / 2;
+export function generateSampleData({ days = REFERENCE_POINTS.length, startDate = REFERENCE_START_DATE } = {}) {
+  const points = days === REFERENCE_POINTS.length ? REFERENCE_POINTS : resample(days);
 
-  const dates = [];
-  const cost = [];
-  const cpa = [];
-  const roi = [];
-  const conversions = [];
-
-  let costAcc = rand() * 3;
-  let convAcc = 1 + rand() * 3;
-
-  for (let i = 0; i < days; i++) {
+  const dates = points.map((_, i) => {
     const date = new Date(startDate);
     date.setDate(date.getDate() + i);
-    dates.push(formatDate(date));
-
-    costAcc += 4 + rand() * 10 + i * 0.6;
-    cost.push(round2(costAcc));
-
-    cpa.push(round2(0.6 + rand() * 0.7));
-
-    const t = (i - mid) / mid; // -1 at the start, +1 at the end
-    const roiBase = 60 + 550 * t * t; // U-shape: high at both edges, low in the middle
-    roi.push(Math.max(10, round2(roiBase + (rand() - 0.5) * 30)));
-
-    convAcc += 3 + rand() * 10 + i * 1.2;
-    conversions.push(Math.round(convAcc));
-  }
+    return formatDate(date);
+  });
 
   const series = [
     {
       key: 'cost',
       label: 'Cost',
       type: 'area',
-      color: '#f1c542',
-      data: cost,
+      color: '#fff0bf',
+      data: points.map((p) => Math.round(p.cost * 100) / 100),
       format: (v) => `$${v.toFixed(2)}`,
     },
     {
@@ -72,23 +72,23 @@ export function generateSampleData({ days = 9, startDate = new Date(2026, 5, 10)
       label: 'CPA',
       type: 'bar',
       color: '#4285f4',
-      data: cpa,
+      data: points.map((p) => Math.round(p.cpa * 100) / 100),
       format: (v) => `$${v.toFixed(2)}`,
     },
     {
       key: 'roi',
       label: 'ROI confirmed',
       type: 'spline',
-      color: '#2e8b3d',
-      data: roi,
+      color: '#0c8400',
+      data: points.map((p) => Math.round(p.roi * 100) / 100),
       format: (v) => v.toFixed(2),
     },
     {
       key: 'conversions',
       label: 'Conversions',
       type: 'line',
-      color: '#9c27b0',
-      data: conversions,
+      color: '#b500fe',
+      data: points.map((p) => Math.round(p.conversions)),
       format: (v) => String(v),
     },
   ];

@@ -77,7 +77,7 @@ export class TimeSeriesChart {
     const margin = { top: 16, right: 12, bottom: 24, left: 12 };
     const innerW = Math.max(width - margin.left - margin.right, 1);
     const innerH = Math.max(height - margin.top - margin.bottom, 1);
-    const barBandH = innerH * 0.12;
+    const barBandH = innerH * 0.06;
     const mainH = innerH - barBandH;
 
     this.svg.setAttribute('viewBox', `0 0 ${width} ${height}`);

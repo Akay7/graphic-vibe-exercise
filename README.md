@@ -37,13 +37,13 @@ new TimeSeriesChart('#chart', {
       key: 'cost',           // unique id, used internally for styling/lookup
       label: 'Cost',         // shown in the tooltip
       type: 'area',          // 'area' | 'spline' | 'line' | 'bar'
-      color: '#f1c542',
-      data: [2.04, 25.85, 44.36, 55.65, 64.2],
+      color: '#fff0bf',
+      data: [2.04, 25.85, 44.36, 55.65, 63.75],
       format: (v) => `$${v.toFixed(2)}`, // optional; defaults to 2-decimal number
     },
-    { key: 'cpa', label: 'CPA', type: 'bar', color: '#4285f4', data: [0.68, 0.86, 1.23, 0.79, 0.91] },
-    { key: 'roi', label: 'ROI confirmed', type: 'spline', color: '#2e8b3d', data: [610.78, 180.5, 161.47, 56.33, 248.9] },
-    { key: 'conversions', label: 'Conversions', type: 'line', color: '#9c27b0', data: [3, 30, 36, 70, 92] },
+    { key: 'cpa', label: 'CPA', type: 'bar', color: '#4285f4', data: [0.68, 0.86, 1.23, 0.79, 0.71] },
+    { key: 'roi', label: 'ROI confirmed', type: 'spline', color: '#0c8400', data: [610.78, 180.5, 161.47, 56.33, 357.25] },
+    { key: 'conversions', label: 'Conversions', type: 'line', color: '#b500fe', data: [3, 30, 36, 70, 90] },
   ],
 });
 ```
@@ -62,12 +62,12 @@ Requirements on the data:
   matching the tick-like bars in the reference.
 
 `src/main.js` wires up a live example using `src/data/generate-sample-data.js`,
-which generates a 4-series dataset shaped like the reference recording
-(cost climbing, ROI dipping mid-range then recovering, conversions
-climbing, CPA fluctuating near a small baseline) from a seeded random
-generator — call `generateSampleData({ days, startDate, seed })` to get a
-different size or shape; the same `seed` always reproduces the same
-numbers.
+which returns the exact values read off the 5 marker tooltips in the
+reference recording (`diagram.gif`), in date order. Call
+`generateSampleData({ days })` with a different `days` count to resample
+that same reference shape onto more or fewer evenly spaced points (linear
+interpolation between the real anchor values) instead of typing out a
+custom dataset.
 
 ## Project layout
 
@@ -77,7 +77,7 @@ src/
     TimeSeriesChart.js  — the chart (rendering + hover/tooltip logic)
     chart.css           — chart-only styles (safe to reuse standalone)
   data/
-    sample-data.js       — example 4-series dataset
+    generate-sample-data.js — example 4-series dataset (real reconstructed values)
   main.js                 — demo bootstrap
   style.css                — demo page chrome (sidebar tiles, card background)
 index.html                  — demo page
