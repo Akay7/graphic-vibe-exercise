@@ -61,9 +61,13 @@ Requirements on the data:
   stay legible. `bar` series render in a short band pinned to the x-axis,
   matching the tick-like bars in the reference.
 
-`src/main.js` wires up a live example using `src/data/sample-data.js`,
-which was reconstructed from the values shown in the reference recording's
-tooltips.
+`src/main.js` wires up a live example using `src/data/generate-sample-data.js`,
+which generates a 4-series dataset shaped like the reference recording
+(cost climbing, ROI dipping mid-range then recovering, conversions
+climbing, CPA fluctuating near a small baseline) from a seeded random
+generator — call `generateSampleData({ days, startDate, seed })` to get a
+different size or shape; the same `seed` always reproduces the same
+numbers.
 
 ## Project layout
 
