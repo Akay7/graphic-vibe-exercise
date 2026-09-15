@@ -1,0 +1,63 @@
+@import './chart/chart.css';
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  background: #f4f4f4;
+  color: #222;
+}
+
+.demo-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.demo-hint {
+  color: #666;
+  margin-top: -8px;
+}
+
+.demo-card {
+  display: flex;
+  background: #fceaea;
+  border-radius: 12px;
+  padding: 16px;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.demo-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.demo-tile {
+  background: #fff;
+  border-radius: 6px;
+  padding: 8px 6px;
+  font-size: 13px;
+  color: #555;
+  text-align: center;
+}
+
+.demo-tile-label {
+  font-weight: 700;
+  color: #111;
+}
+
+.demo-chart {
+  flex: 1;
+  min-width: 0;
+  background: #fdf1f1;
+  border: 1px solid #f0d5d5;
+  border-radius: 8px;
+  padding: 12px;
+}

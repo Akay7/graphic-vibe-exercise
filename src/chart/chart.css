@@ -1,0 +1,104 @@
+.tsc-root {
+  --tsc-baseline: #d8d8d8;
+  --tsc-crosshair: rgba(0, 0, 0, 0.25);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+.tsc-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.tsc-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.tsc-baseline {
+  stroke: var(--tsc-baseline);
+  stroke-width: 1;
+}
+
+.tsc-crosshair {
+  stroke: var(--tsc-crosshair);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.tsc-overlay {
+  cursor: crosshair;
+}
+
+.tsc-area {
+  opacity: 0.45;
+  stroke: none;
+}
+
+.tsc-line {
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tsc-line.tsc-spline {
+  stroke-width: 4;
+}
+
+.tsc-marker {
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.tsc-bar {
+  opacity: 0.9;
+}
+
+.tsc-hover-dot {
+  stroke: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+}
+
+.tsc-tooltip {
+  position: absolute;
+  z-index: 10;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 14px 18px;
+  min-width: 200px;
+  pointer-events: none;
+}
+
+.tsc-tooltip-date {
+  color: #6b6b6b;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.tsc-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: #222;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.tsc-tooltip-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tsc-tooltip-label {
+  color: #333;
+}
+
+.tsc-tooltip-value {
+  font-weight: 700;
+  color: #111;
+}
